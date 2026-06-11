@@ -51,10 +51,10 @@ const Register = () => {
         {/* Header */}
         <div style={styles.header}>
           <div style={styles.logoWrapper}>
-            <Globe size={32} color="#a855f7" style={{ animation: 'spin 12s linear infinite' }} />
+            <Globe size={32} color="var(--primary)" style={{ animation: 'spin 12s linear infinite' }} />
           </div>
           <h2 style={styles.title}>Join IAESTE India</h2>
-          <p style={styles.subtitle}>Create a student account to apply for international offers</p>
+          <p style={styles.subtitle}>Create a student account to apply for global placement offers</p>
         </div>
 
         {/* Error Message */}
@@ -160,12 +160,16 @@ const styles = {
     minHeight: 'calc(100vh - 100px)',
     padding: '24px',
     boxSizing: 'border-box',
+    backgroundColor: 'var(--bg-primary)',
   },
   card: {
     width: '100%',
     maxWidth: '445px',
     padding: '40px',
     borderRadius: 'var(--radius-lg)',
+    backgroundColor: '#fff',
+    border: '1px solid var(--border-color)',
+    boxShadow: 'var(--shadow-md)',
   },
   header: {
     display: 'flex',
@@ -180,14 +184,14 @@ const styles = {
     width: '60px',
     height: '60px',
     borderRadius: 'var(--radius-md)',
-    backgroundColor: 'rgba(168, 85, 247, 0.1)',
+    backgroundColor: 'var(--primary-glow)',
     marginBottom: '16px',
-    border: '1px solid rgba(168, 85, 247, 0.2)',
+    border: '1px solid rgba(0, 59, 89, 0.1)',
   },
   title: {
     fontSize: '1.75rem',
     fontWeight: '700',
-    color: '#fff',
+    color: 'var(--text-primary)',
     marginBottom: '6px',
     letterSpacing: '-0.02em',
   },
@@ -200,8 +204,8 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    border: '1px solid rgba(239, 68, 68, 0.25)',
+    backgroundColor: 'rgba(239, 68, 68, 0.06)',
+    border: '1px solid rgba(239, 68, 68, 0.15)',
     borderRadius: 'var(--radius-md)',
     color: 'var(--danger)',
     padding: '12px 16px',

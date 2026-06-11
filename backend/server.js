@@ -107,8 +107,9 @@ const seedAdmins = async () => {
 // =========================
 const startServer = async () => {
   try {
+    console.log('Connecting to MongoDB Atlas...');
     await mongoose.connect(MONGODB_URI);
-    console.log('✅ Connected to MongoDB');
+    console.log('✅ Connected to MongoDB Atlas');
 
     await seedAdmins();
 
@@ -117,8 +118,20 @@ const startServer = async () => {
     });
 
   } catch (err) {
-    console.error('❌ MongoDB connection failed:', err);
-    process.exit(1);
+    console.warn('⚠️ MongoDB Atlas connection failed. Attempting local MongoDB connection (mongodb://localhost:27017/iaeste_india)...');
+    try {
+      await mongoose.connect('mongodb://localhost:27017/iaeste_india');
+      console.log('✅ Connected to Local MongoDB');
+
+      await seedAdmins();
+
+      app.listen(PORT, () => {
+        console.log(`🚀 Server running on port ${PORT}`);
+      });
+    } catch (localErr) {
+      console.error('❌ Both Atlas and Local MongoDB connections failed. Exiting.', localErr);
+      process.exit(1);
+    }
   }
 };
 

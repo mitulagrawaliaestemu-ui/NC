@@ -51,6 +51,20 @@ const OfferSchema = new mongoose.Schema({
     type: [String],
     default: []
   },
+  deadline: {
+    type: Date,
+    required: false
+  },
+  status: {
+    type: String,
+    enum: ['DRAFT', 'RELEASED', 'CLOSED'],
+    default: 'DRAFT'
+  },
+  finalSelectedApplication: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Application',
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now

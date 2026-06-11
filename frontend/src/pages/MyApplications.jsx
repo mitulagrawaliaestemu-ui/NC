@@ -1,7 +1,6 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Layers, Calendar, Globe, Clock, DollarSign, Briefcase, CheckCircle } from 'lucide-react';
+import { Layers, Calendar, Globe, Clock, DollarSign, Briefcase, CheckCircle, Award, Sparkles, XCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const MyApplications = () => {
@@ -30,6 +29,12 @@ const MyApplications = () => {
 
   const getStatusBadge = (status) => {
     switch (status) {
+      case 'SELECTED':
+        return <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Award size={12} /> Selected Winner</span>;
+      case 'NOMINATED':
+        return <span className="badge badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Sparkles size={12} /> Nominated Candidate</span>;
+      case 'NOT_SELECTED':
+        return <span className="badge badge-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><XCircle size={12} /> Not Selected</span>;
       case 'ACCEPTED':
         return <span className="badge badge-success">Accepted</span>;
       case 'REJECTED':
@@ -46,11 +51,11 @@ const MyApplications = () => {
     <div style={styles.container} className="animate-fade-in">
       <div className="page-header">
         <div>
-          <h1 className="page-title">My Applications</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>Track the status of all internship offers you have applied to</p>
+          <h1 className="page-title">My Nominations</h1>
+          <p style={{ color: 'var(--text-muted)' }}>Track the real-time status of placement applications you have submitted</p>
         </div>
         <Link to="/" className="btn btn-primary">
-          Explore More Offers
+          Explore Placements
         </Link>
       </div>
 
@@ -61,15 +66,15 @@ const MyApplications = () => {
       )}
 
       {loading ? (
-        <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '40px' }}>Loading your applications...</p>
+        <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px' }}>Loading your nominations...</p>
       ) : applications.length === 0 ? (
         <div className="glass-card" style={styles.emptyCard}>
-          <Layers size={36} color="var(--text-muted)" style={{ marginBottom: '16px' }} />
-          <h3 style={{ color: '#fff', marginBottom: '8px' }}>No applications yet</h3>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
-            You haven't submitted any applications. Go to the dashboard to find available offers.
+          <Layers size={40} color="var(--text-muted)" style={{ marginBottom: '16px' }} />
+          <h3 style={{ color: 'var(--text-primary)', marginBottom: '8px', fontWeight: '600' }}>No Active Nominations</h3>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '20px', maxWidth: '400px' }}>
+            You have not applied to any internship placements yet. Go back to the placement board to find open listings.
           </p>
-          <Link to="/" className="btn btn-secondary">Browse Offers</Link>
+          <Link to="/" className="btn btn-secondary">Browse Open Listings</Link>
         </div>
       ) : (
         <div style={styles.appsList}>
@@ -110,7 +115,7 @@ const MyApplications = () => {
                   </div>
                   <div style={styles.detailItem}>
                     <Calendar size={14} color="var(--text-muted)" />
-                    <span>Applied on: {new Date(app.appliedAt).toLocaleDateString(undefined, {
+                    <span>Applied: {new Date(app.appliedAt).toLocaleDateString(undefined, {
                       year: 'numeric',
                       month: 'short',
                       day: 'numeric'
@@ -118,11 +123,20 @@ const MyApplications = () => {
                   </div>
                 </div>
 
-                {app.status === 'ACCEPTED' && (
+                {app.status === 'SELECTED' && (
                   <div style={styles.congratsBanner}>
                     <CheckCircle size={18} color="var(--success)" />
-                    <span style={{ fontWeight: '500' }}>
-                      Congratulations! Your application has been accepted. The Local Committee will contact you shortly with the details.
+                    <span style={{ fontWeight: '600' }}>
+                      Congratulations! You have been selected as the winner for this placement. The National/Local Committee will contact you shortly with travel and visa documentation steps.
+                    </span>
+                  </div>
+                )}
+
+                {app.status === 'NOMINATED' && (
+                  <div style={styles.nominationBanner}>
+                    <Sparkles size={18} color="var(--warning)" />
+                    <span style={{ fontWeight: '600' }}>
+                      Your application has been nominated by your LC Admin. The National Committee (NC) is currently reviewing the nominations to select the final winner.
                     </span>
                   </div>
                 )}
@@ -142,8 +156,8 @@ const styles = {
     padding: '30px 24px',
   },
   errorAlert: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    border: '1px solid rgba(239, 68, 68, 0.25)',
+    backgroundColor: 'rgba(239, 68, 68, 0.06)',
+    border: '1px solid rgba(239, 68, 68, 0.15)',
     borderRadius: 'var(--radius-md)',
     color: 'var(--danger)',
     padding: '12px 16px',
@@ -155,6 +169,9 @@ const styles = {
     alignItems: 'center',
     padding: '50px 30px',
     textAlign: 'center',
+    backgroundColor: '#fff',
+    border: '1px solid var(--border-color)',
+    borderRadius: 'var(--radius-lg)',
   },
   appsList: {
     display: 'flex',
@@ -163,7 +180,9 @@ const styles = {
   },
   appCard: {
     padding: '24px',
-    backgroundColor: 'rgba(21, 28, 44, 0.4)',
+    backgroundColor: '#fff',
+    border: '1px solid var(--border-color)',
+    borderRadius: 'var(--radius-lg)',
     display: 'flex',
     flexDirection: 'column',
     gap: '16px',
@@ -183,8 +202,9 @@ const styles = {
   },
   appTitle: {
     fontSize: '1.25rem',
-    color: '#fff',
+    color: 'var(--text-primary)',
     marginTop: '2px',
+    fontWeight: '600',
   },
   badgeWrapper: {
     fontSize: '0.9rem',
@@ -195,7 +215,7 @@ const styles = {
     gap: '20px',
     fontSize: '0.88rem',
     color: 'var(--text-secondary)',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+    borderBottom: '1px solid var(--border-color)',
     paddingBottom: '16px',
   },
   detailItem: {
@@ -207,11 +227,22 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
-    border: '1px solid rgba(16, 185, 129, 0.25)',
+    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+    border: '1px solid rgba(16, 185, 129, 0.15)',
     padding: '12px 16px',
     borderRadius: 'var(--radius-md)',
     color: 'var(--success)',
+    fontSize: '0.9rem',
+  },
+  nominationBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    backgroundColor: 'rgba(245, 158, 11, 0.05)',
+    border: '1px solid rgba(245, 158, 11, 0.15)',
+    padding: '12px 16px',
+    borderRadius: 'var(--radius-md)',
+    color: 'var(--warning)',
     fontSize: '0.9rem',
   }
 };

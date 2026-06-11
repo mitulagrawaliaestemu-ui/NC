@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -13,7 +12,10 @@ import {
   CheckCircle, 
   AlertCircle,
   Copy,
-  ChevronUp
+  ChevronDown,
+  Info,
+  UserPlus,
+  AlertTriangle
 } from 'lucide-react';
 
 const ManageMembers = () => {
@@ -35,6 +37,9 @@ const ManageMembers = () => {
   const [showBulkPanel, setShowBulkPanel] = useState(false);
   const [defaultLc, setDefaultLc] = useState('MUJ');
   const [uploading, setUploading] = useState(false);
+  
+  // CSV Preview & Verification States
+  const [csvPreview, setCsvPreview] = useState(null); // { rows: [], stats: { total, valid, duplicates, invalid } }
   const [uploadResults, setUploadResults] = useState(null);
 
   const fetchMembers = async () => {
@@ -61,7 +66,7 @@ const ManageMembers = () => {
 
   useEffect(() => {
     fetchMembers();
-  }, [lcFilter]); // Refetch on LC change
+  }, [lcFilter]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -112,39 +117,42 @@ const ManageMembers = () => {
     }
   };
 
-  // Handle CSV Upload and Parse
-  const handleCsvChange = (e) => {
+  // Handle CSV file selection and parsing (Preview before upload)
+  const handleCsvSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    setUploading(true);
     setStatus({ type: '', message: '' });
     setUploadResults(null);
 
     const reader = new FileReader();
-    reader.onload = async (event) => {
+    reader.onload = (event) => {
       try {
         const text = event.target.result;
         const rows = text.split(/\r?\n/);
         
-        const parsedMembers = [];
+        const parsedRows = [];
         let headers = [];
         let startIndex = 0;
 
         if (rows.length > 0 && rows[0].trim()) {
           const firstRowCells = rows[0].split(',').map(c => c.trim().toLowerCase());
-          // Check if first row is a header
           if (firstRowCells.includes('mailid') || firstRowCells.includes('email') || firstRowCells.includes('name') || firstRowCells.includes('learnid')) {
             headers = firstRowCells;
             startIndex = 1;
           }
         }
 
+        // Stats track
+        let validCount = 0;
+        let dupCount = 0;
+        let invalidCount = 0;
+        const emailSetInCsv = new Set();
+
         for (let i = startIndex; i < rows.length; i++) {
           const rowText = rows[i].trim();
           if (!rowText) continue;
 
-          // Simple CSV line split supporting optional commas
           const cells = rowText.split(',').map(c => c.trim());
 
           let learnId = '';
@@ -154,7 +162,6 @@ const ManageMembers = () => {
           let lc = '';
 
           if (headers.length > 0) {
-            // Map cells according to header columns
             const mailIdx = headers.findIndex(h => h.includes('mail') || h.includes('email'));
             const nameIdx = headers.findIndex(h => h === 'name' || h.includes('fullname') || h.includes('full name'));
             const learnIdx = headers.findIndex(h => h.includes('learnid') || h.includes('learn_id') || h === 'id');
@@ -167,7 +174,6 @@ const ManageMembers = () => {
             if (yearsIdx !== -1 && cells[yearsIdx]) yearsLeft = cells[yearsIdx];
             if (lcIdx !== -1 && cells[lcIdx]) lc = cells[lcIdx];
           } else {
-            // Fallback order: learnid, mailid, name, years left for membership, lc
             learnId = cells[0] || '';
             email = cells[1] || '';
             name = cells[2] || '';
@@ -175,45 +181,115 @@ const ManageMembers = () => {
             lc = cells[4] || '';
           }
 
-          if (email && name) {
-            parsedMembers.push({
-              learnId: learnId || undefined,
-              email,
-              name,
-              yearsLeftForMembership: Number(yearsLeft) || 0,
-              lc: lc || undefined
-            });
+          if (!email && !name) continue;
+
+          // Inline validation
+          let rowStatus = 'Valid';
+          let rowReason = '';
+
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          const targetLc = (lc || defaultLc || '').trim().toUpperCase();
+
+          if (!name.trim()) {
+            rowStatus = 'Invalid';
+            rowReason = 'Missing Name';
+            invalidCount++;
+          } else if (!email.trim()) {
+            rowStatus = 'Invalid';
+            rowReason = 'Missing Email';
+            invalidCount++;
+          } else if (!emailRegex.test(email.trim().toLowerCase())) {
+            rowStatus = 'Invalid';
+            rowReason = 'Invalid Email Format';
+            invalidCount++;
+          } else if (lc && !['MU', 'MUJ', 'KU', 'JECRC'].includes(targetLc)) {
+            rowStatus = 'Invalid';
+            rowReason = `Invalid LC: ${targetLc}`;
+            invalidCount++;
+          } else if (emailSetInCsv.has(email.trim().toLowerCase())) {
+            rowStatus = 'Duplicate';
+            rowReason = 'Duplicate in CSV file';
+            dupCount++;
+          } else {
+            // Check if email already exists in system database
+            const dbMatch = members.find(m => m.email.toLowerCase() === email.trim().toLowerCase());
+            if (dbMatch) {
+              rowStatus = 'Duplicate';
+              rowReason = 'Email exists in Database';
+              dupCount++;
+            } else {
+              validCount++;
+              emailSetInCsv.add(email.trim().toLowerCase());
+            }
           }
+
+          parsedRows.push({
+            learnId: learnId ? learnId.trim() : '',
+            email: email ? email.trim() : '',
+            name: name ? name.trim() : '',
+            yearsLeftForMembership: Number(yearsLeft) || 0,
+            lc: targetLc,
+            status: rowStatus,
+            reason: rowReason
+          });
         }
 
-        if (parsedMembers.length === 0) {
-          throw new Error('No valid records found in the CSV. Make sure you have at least a Name and Email column.');
+        if (parsedRows.length === 0) {
+          throw new Error('No valid records found in the CSV. Make sure you have name and email columns.');
         }
 
-        // Send parsed records to backend
-        const response = await authFetch('/api/members/bulk-upload', {
-          method: 'POST',
-          body: JSON.stringify({
-            members: parsedMembers,
-            defaultLc
-          })
+        setCsvPreview({
+          rows: parsedRows,
+          stats: {
+            total: parsedRows.length,
+            valid: validCount,
+            duplicates: dupCount,
+            invalid: invalidCount
+          }
         });
-
-        setUploadResults(response);
-        setStatus({ type: 'success', message: `CSV upload completed. ${response.success.length} members successfully created.` });
-        
-        // Refresh local student list
-        fetchMembers();
       } catch (err) {
-        console.error('CSV parse/upload failed:', err);
-        setStatus({ type: 'error', message: err.message || 'Failed to process CSV file.' });
+        console.error('CSV parse failed:', err);
+        setStatus({ type: 'error', message: err.message || 'Failed to parse CSV file.' });
       } finally {
-        setUploading(false);
-        // Reset file input
         e.target.value = '';
       }
     };
     reader.readAsText(file);
+  };
+
+  // Submit parsed valid rows to backend
+  const handleConfirmImport = async () => {
+    if (!csvPreview || csvPreview.stats.valid === 0) return;
+
+    setUploading(true);
+    setStatus({ type: '', message: '' });
+
+    try {
+      // Filter out invalid/duplicate rows
+      const recordsToImport = csvPreview.rows.filter(r => r.status === 'Valid');
+
+      const response = await authFetch('/api/members/bulk-upload', {
+        method: 'POST',
+        body: JSON.stringify({
+          members: recordsToImport,
+          defaultLc
+        })
+      });
+
+      setUploadResults(response);
+      setStatus({ 
+        type: 'success', 
+        message: `Import Completed! Registered ${response.success.length} student accounts, encountered ${response.errors.length} database conflicts.` 
+      });
+      
+      setCsvPreview(null);
+      fetchMembers();
+    } catch (err) {
+      console.error('Import failed:', err);
+      setStatus({ type: 'error', message: err.message || 'Bulk import failed.' });
+    } finally {
+      setUploading(false);
+    }
   };
 
   const copyToClipboard = (text) => {
@@ -225,19 +301,23 @@ const ManageMembers = () => {
     <div style={styles.container} className="animate-fade-in">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Manage Members</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>View, search, edit, and bulk-import student accounts across all Local Committees</p>
+          <h1 className="page-title">Candidate Directory</h1>
+          <p style={{ color: 'var(--text-muted)' }}>View, edit, search, and bulk-import student accounts across Local Committees</p>
         </div>
         <button 
-          onClick={() => setShowBulkPanel(!showBulkPanel)} 
+          onClick={() => {
+            setShowBulkPanel(!showBulkPanel);
+            setCsvPreview(null);
+            setUploadResults(null);
+          }} 
           className="btn btn-primary"
         >
-          {showBulkPanel ? <ChevronUp size={18} /> : <Upload size={18} />}
-          {showBulkPanel ? 'Hide Bulk Upload' : 'Bulk Import Students (CSV)'}
+          {showBulkPanel ? <ChevronDown size={18} /> : <Upload size={18} />}
+          {showBulkPanel ? 'Hide Importer' : 'Bulk Import (CSV)'}
         </button>
       </div>
 
-      {/* Alert Banner */}
+      {/* Status Alert */}
       {status.message && (
         <div style={status.type === 'success' ? styles.successAlert : styles.errorAlert}>
           {status.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
@@ -245,67 +325,155 @@ const ManageMembers = () => {
         </div>
       )}
 
-      {/* CSV Bulk Upload Collapsible Panel */}
+      {/* CSV Bulk Importer Panel */}
       {showBulkPanel && (
         <div className="glass-card animate-slide-up" style={styles.bulkPanel}>
           <div style={styles.bulkHeader}>
             <FileSpreadsheet size={24} color="var(--primary)" />
-            <h3 style={{ color: 'var(--primary)' }}>Bulk Import Members via CSV</h3>
+            <h3 style={{ color: 'var(--text-primary)', margin: 0 }}>Smart CSV Student Importer</h3>
           </div>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '16px' }}>
-            Upload a CSV containing student records. The system will automatically register each student with a <strong>temporary password</strong>, simulate sending them a welcome email, and force them to choose a new password upon their first sign-in.
+          
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: '8px 0 20px 0' }}>
+            Upload student rosters. The system validates formatting, flags database duplicates, and provides a full import preview. Generated passwords will be simulated on console logs.
           </p>
 
           <div style={styles.instructionsBox}>
-            <h4 style={{ fontSize: '0.9rem', color: 'var(--primary)', marginBottom: '6px' }}>Supported CSV Format:</h4>
+            <h4 style={{ fontSize: '0.9rem', color: 'var(--primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Info size={16} /> Column Formatting Instructions
+            </h4>
             <code style={styles.codeSample}>learnid, mailid, name, years left for membership, lc</code>
             <ul style={styles.bulletList}>
-              <li>Headers are optional. If present, columns can be in any order (e.g. <code>learnId</code>, <code>mailId</code>, <code>name</code>).</li>
-              <li><code>lc</code> is optional. If left blank, students will be registered under the default LC selected below.</li>
-              <li><code>learnid</code> and <code>years left for membership</code> are optional.</li>
+              <li>Columns can be ordered arbitrarily if headers (like <code>mailid</code>, <code>name</code>, <code>lc</code>) are provided on the first line.</li>
+              <li>Missing <code>lc</code> values will fallback to the default selection chosen below.</li>
+              <li>Only valid rows are imported. Duplicates and rows with validation issues will be skipped.</li>
             </ul>
           </div>
 
-          <div style={styles.uploadControls}>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Default LC (For records without an LC column)</label>
-              <select 
-                className="form-select"
-                value={defaultLc}
-                onChange={(e) => setDefaultLc(e.target.value)}
-                style={{ width: '220px' }}
-              >
-                <option value="MU">LC MU</option>
-                <option value="MUJ">LC MUJ</option>
-                <option value="KU">LC KU</option>
-                <option value="JECRC">LC JECRC</option>
-              </select>
-            </div>
+          {!csvPreview && !uploadResults && (
+            <div style={styles.uploadControls}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Default Committee (LC)</label>
+                <select 
+                  className="form-select"
+                  value={defaultLc}
+                  onChange={(e) => setDefaultLc(e.target.value)}
+                  style={{ width: '220px' }}
+                >
+                  <option value="MU">LC MU</option>
+                  <option value="MUJ">LC MUJ</option>
+                  <option value="KU">LC KU</option>
+                  <option value="JECRC">LC JECRC</option>
+                </select>
+              </div>
 
-            <div style={styles.fileInputWrapper}>
-              <label htmlFor="csv-file-upload" className="btn btn-outline" style={{ cursor: 'pointer' }}>
-                <Upload size={16} />
-                {uploading ? 'Processing CSV...' : 'Select & Upload CSV'}
-              </label>
-              <input 
-                id="csv-file-upload"
-                type="file" 
-                accept=".csv"
-                onChange={handleCsvChange}
-                disabled={uploading}
-                style={{ display: 'none' }}
-              />
+              <div style={styles.fileInputWrapper}>
+                <label htmlFor="csv-file-upload" className="btn btn-outline" style={{ cursor: 'pointer' }}>
+                  <Upload size={16} /> Select CSV File
+                </label>
+                <input 
+                  id="csv-file-upload"
+                  type="file" 
+                  accept=".csv"
+                  onChange={handleCsvSelect}
+                  style={{ display: 'none' }}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Render generated passwords for NC Admin reference */}
+          {/* Render CSV validation preview */}
+          {csvPreview && (
+            <div style={styles.resultsContainer} className="animate-slide-up">
+              <h3 style={{ color: 'var(--text-primary)', marginBottom: '16px' }}>CSV Import Preview & Validation</h3>
+              
+              {/* Stat overview cards */}
+              <div style={styles.previewStatsGrid}>
+                <div style={styles.statBox}>
+                  <span style={styles.statBoxLabel}>Total Found</span>
+                  <span style={styles.statBoxValue}>{csvPreview.stats.total}</span>
+                </div>
+                <div style={{ ...styles.statBox, borderLeftColor: 'var(--success)' }}>
+                  <span style={styles.statBoxLabel}>Ready to Import</span>
+                  <span style={styles.statBoxValue}>{csvPreview.stats.valid}</span>
+                </div>
+                <div style={{ ...styles.statBox, borderLeftColor: 'var(--warning)' }}>
+                  <span style={styles.statBoxLabel}>Duplicates flagged</span>
+                  <span style={styles.statBoxValue}>{csvPreview.stats.duplicates}</span>
+                </div>
+                <div style={{ ...styles.statBox, borderLeftColor: 'var(--danger)' }}>
+                  <span style={styles.statBoxLabel}>Errors / Warnings</span>
+                  <span style={styles.statBoxValue}>{csvPreview.stats.invalid}</span>
+                </div>
+              </div>
+
+              {/* Preview Table */}
+              <div style={styles.resultsScroll}>
+                <table className="custom-table" style={{ fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email ID</th>
+                      <th>Committee</th>
+                      <th>Learn ID</th>
+                      <th>Validation Status</th>
+                      <th>Reason / Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {csvPreview.rows.map((row, idx) => (
+                      <tr key={idx} style={row.status === 'Invalid' ? { backgroundColor: 'rgba(239, 68, 68, 0.02)' } : row.status === 'Duplicate' ? { backgroundColor: 'rgba(245, 158, 11, 0.02)' } : {}}>
+                        <td style={{ fontWeight: '600' }}>{row.name || <span style={{ color: 'var(--danger)' }}>None</span>}</td>
+                        <td>{row.email || <span style={{ color: 'var(--danger)' }}>None</span>}</td>
+                        <td><span className="badge badge-specific">{row.lc}</span></td>
+                        <td>{row.learnId || '-'}</td>
+                        <td>
+                          <span className={row.status === 'Valid' ? 'badge badge-success' : row.status === 'Duplicate' ? 'badge badge-warning' : 'badge badge-danger'}>
+                            {row.status}
+                          </span>
+                        </td>
+                        <td style={row.status === 'Valid' ? { color: 'var(--success)' } : { color: 'var(--text-muted)' }}>
+                          {row.status === 'Valid' ? 'Valid' : row.reason}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={styles.actionImportRow}>
+                <button 
+                  onClick={() => setCsvPreview(null)} 
+                  className="btn btn-secondary"
+                  disabled={uploading}
+                >
+                  Cancel & Reselect File
+                </button>
+                <button 
+                  onClick={handleConfirmImport} 
+                  className="btn btn-primary"
+                  disabled={uploading || csvPreview.stats.valid === 0}
+                  style={{ background: 'var(--success)', boxShadow: 'none' }}
+                >
+                  <UserPlus size={16} /> Confirm & Import {csvPreview.stats.valid} Students
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Render Import Results report */}
           {uploadResults && (
             <div style={styles.resultsContainer} className="animate-slide-up">
-              <h4 style={{ color: 'var(--primary)', marginBottom: '12px' }}>Generated Credentials:</h4>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ color: 'var(--text-primary)', margin: 0 }}>Import Summary & Credentials</h3>
+                <button onClick={() => setUploadResults(null)} className="btn btn-secondary">Close Summary</button>
+              </div>
               
               {uploadResults.success.length > 0 && (
-                <div style={{ marginBottom: '20px' }}>
-                  <span className="badge badge-success" style={{ marginBottom: '8px' }}>Created Accounts ({uploadResults.success.length})</span>
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                    <CheckCircle size={18} color="var(--success)" />
+                    <h4 style={{ color: 'var(--text-primary)', margin: 0 }}>Registered Accounts ({uploadResults.success.length})</h4>
+                  </div>
                   <div style={styles.resultsScroll}>
                     <table className="custom-table" style={{ fontSize: '0.85rem' }}>
                       <thead>
@@ -330,7 +498,7 @@ const ManageMembers = () => {
                               <button 
                                 onClick={() => copyToClipboard(res.tempPassword)}
                                 style={styles.iconBtn}
-                                title="Copy Temp Password"
+                                title="Copy Password"
                               >
                                 <Copy size={14} />
                               </button>
@@ -345,19 +513,22 @@ const ManageMembers = () => {
 
               {uploadResults.errors.length > 0 && (
                 <div>
-                  <span className="badge badge-danger" style={{ marginBottom: '8px' }}>Skipped Records ({uploadResults.errors.length})</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                    <AlertTriangle size={18} color="var(--danger)" />
+                    <h4 style={{ color: 'var(--text-primary)', margin: 0 }}>Failed / Skipped Records ({uploadResults.errors.length})</h4>
+                  </div>
                   <div style={styles.resultsScroll}>
                     <table className="custom-table" style={{ fontSize: '0.85rem' }}>
                       <thead>
                         <tr>
                           <th>Email</th>
-                          <th>Reason / Warning</th>
+                          <th>Failure Reason</th>
                         </tr>
                       </thead>
                       <tbody>
                         {uploadResults.errors.map((err, idx) => (
                           <tr key={idx}>
-                            <td>{err.email}</td>
+                            <td style={{ fontWeight: '500' }}>{err.email}</td>
                             <td style={{ color: 'var(--danger)' }}>{err.reason}</td>
                           </tr>
                         ))}
@@ -389,7 +560,7 @@ const ManageMembers = () => {
         </form>
 
         <div style={styles.filterWrapper}>
-          <Filter size={18} color="var(--text-secondary)" />
+          <Filter size={18} color="var(--text-muted)" />
           <select 
             className="form-select"
             value={lcFilter}
@@ -407,10 +578,10 @@ const ManageMembers = () => {
 
       {/* Members Table */}
       {loading ? (
-        <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '40px' }}>Loading member data...</p>
+        <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px' }}>Loading candidate profiles...</p>
       ) : members.length === 0 ? (
-        <div className="glass-card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-          No members found matching the search/filter criteria.
+        <div className="glass-card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+          No student profiles found matching the search/filter criteria.
         </div>
       ) : (
         <div className="table-container">
@@ -419,11 +590,11 @@ const ManageMembers = () => {
               <tr>
                 <th>Learn ID</th>
                 <th>Name</th>
-                <th>Email</th>
-                <th>LC</th>
+                <th>Email ID</th>
+                <th>Committee</th>
                 <th>Years Left</th>
-                <th>Registered At</th>
-                <th>Resume Status</th>
+                <th>Joined Date</th>
+                <th>Profile Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -450,7 +621,7 @@ const ManageMembers = () => {
                           <div style={styles.avatar}>
                             {member.name.charAt(0).toUpperCase()}
                           </div>
-                          <span style={{ fontWeight: '500', color: 'var(--text-primary)' }}>{member.name}</span>
+                          <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{member.name}</span>
                         </div>
                       )}
                     </td>
@@ -494,7 +665,7 @@ const ManageMembers = () => {
                     </td>
                     <td>
                       {member.isTempPassword ? (
-                        <span className="badge badge-warning">Temp Password</span>
+                        <span className="badge badge-warning">Temp Pass</span>
                       ) : member.resume?.isCompleted ? (
                         <span className="badge badge-success">Completed</span>
                       ) : (
@@ -562,6 +733,8 @@ const styles = {
     flexWrap: 'wrap',
     marginBottom: '24px',
     backgroundColor: 'var(--bg-secondary)',
+    border: '1px solid var(--border-color)',
+    borderRadius: 'var(--radius-md)',
   },
   searchForm: {
     display: 'flex',
@@ -593,7 +766,7 @@ const styles = {
     height: '32px',
     borderRadius: '50%',
     backgroundColor: 'var(--primary-glow)',
-    border: '1px solid rgba(5, 60, 94, 0.2)',
+    border: '1px solid var(--primary-glow)',
     color: 'var(--primary)',
     fontWeight: '700',
     fontSize: '0.9rem',
@@ -601,7 +774,7 @@ const styles = {
   editBtn: {
     background: 'none',
     border: 'none',
-    color: 'var(--accent)',
+    color: 'var(--secondary)',
     cursor: 'pointer',
     padding: '6px',
     borderRadius: '4px',
@@ -642,7 +815,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    backgroundColor: 'rgba(16, 185, 129, 0.06)',
     border: '1px solid rgba(16, 185, 129, 0.15)',
     borderRadius: 'var(--radius-md)',
     color: 'var(--success)',
@@ -653,7 +826,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    backgroundColor: 'rgba(239, 68, 68, 0.06)',
     border: '1px solid rgba(239, 68, 68, 0.15)',
     borderRadius: 'var(--radius-md)',
     color: 'var(--danger)',
@@ -663,13 +836,14 @@ const styles = {
   bulkPanel: {
     padding: '30px',
     marginBottom: '24px',
-    backgroundColor: 'var(--bg-secondary)',
+    backgroundColor: '#fff',
+    border: '1px solid var(--border-color)',
+    borderRadius: 'var(--radius-lg)',
   },
   bulkHeader: {
     display: 'flex',
     alignItems: 'center',
-    gap: '10px',
-    marginBottom: '10px',
+    gap: '12px',
   },
   instructionsBox: {
     backgroundColor: 'var(--bg-tertiary)',
@@ -681,7 +855,7 @@ const styles = {
   codeSample: {
     display: 'block',
     padding: '8px 12px',
-    backgroundColor: 'var(--bg-secondary)',
+    backgroundColor: '#fff',
     borderRadius: '4px',
     fontFamily: 'monospace',
     fontSize: '0.9rem',
@@ -714,11 +888,45 @@ const styles = {
     paddingTop: '20px',
     borderTop: '1px solid var(--border-color)',
   },
+  previewStatsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+    gap: '16px',
+    marginBottom: '20px',
+  },
+  statBox: {
+    padding: '14px 18px',
+    backgroundColor: 'var(--bg-tertiary)',
+    borderRadius: 'var(--radius-md)',
+    borderLeft: '4px solid var(--primary)',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  statBoxLabel: {
+    fontSize: '0.8rem',
+    color: 'var(--text-muted)',
+    textTransform: 'uppercase',
+    fontWeight: '600',
+  },
+  statBoxValue: {
+    fontSize: '1.5rem',
+    fontWeight: '800',
+    color: 'var(--text-primary)',
+    marginTop: '4px',
+  },
   resultsScroll: {
     maxHeight: '280px',
     overflowY: 'auto',
     border: '1px solid var(--border-color)',
     borderRadius: 'var(--radius-md)',
+    backgroundColor: '#fff',
+  },
+  actionImportRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: '20px',
+    gap: '16px',
   },
   iconBtn: {
     background: 'none',

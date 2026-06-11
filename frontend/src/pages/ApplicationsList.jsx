@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import ResumePreview from '../components/ResumePreview';
@@ -9,7 +8,12 @@ import {
   ArrowLeft,
   Search,
   BookOpen,
-  Download
+  Download,
+  Award,
+  AlertCircle,
+  Calendar,
+  Layers,
+  Sparkles
 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
@@ -69,7 +73,7 @@ const ApplicationsList = () => {
     fetchData();
   }, [offerIdFilter]); // Refetch when filter changes
 
-  // Update Status
+  // Update Status (Nominate or Select Winner)
   const handleUpdateStatus = async (appId, newStatus) => {
     setStatusMsg({ type: '', text: '' });
     try {
@@ -85,7 +89,11 @@ const ApplicationsList = () => {
         setSelectedApp({ ...selectedApp, status: result.application.status });
       }
 
-      setStatusMsg({ type: 'success', text: `Application status updated to ${newStatus}` });
+      setStatusMsg({ 
+        type: 'success', 
+        text: `Successfully updated applicant status to ${newStatus === 'NOMINATED' ? 'Nominated' : newStatus === 'SELECTED' ? 'Selected Winner' : newStatus}` 
+      });
+      fetchData();
     } catch (err) {
       console.error('Status update failed:', err);
       setStatusMsg({ type: 'error', text: err.message || 'Failed to update application status' });
@@ -111,8 +119,8 @@ const ApplicationsList = () => {
 
     let y = 40;
 
-    // Header Background Header Bar - Deep Blue (#053c5e)
-    doc.setFillColor(5, 60, 94);
+    // Header Background Header Bar - Deep Blue (#003b59)
+    doc.setFillColor(0, 59, 89);
     doc.rect(40, y, 515, 65, 'F');
 
     // Header Text
@@ -156,7 +164,7 @@ const ApplicationsList = () => {
     if (personalInfo.bio) {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
-      doc.setTextColor(5, 60, 94); // #053c5e
+      doc.setTextColor(0, 59, 89); 
       doc.text("PROFESSIONAL SUMMARY", 40, y);
       y += 6;
       doc.setDrawColor(226, 232, 240);
@@ -176,7 +184,7 @@ const ApplicationsList = () => {
       if (y > 740) { doc.addPage(); y = 40; }
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
-      doc.setTextColor(5, 60, 94);
+      doc.setTextColor(0, 59, 89);
       doc.text("EDUCATION HISTORY", 40, y);
       y += 6;
       doc.setDrawColor(226, 232, 240);
@@ -206,7 +214,7 @@ const ApplicationsList = () => {
       if (y > 720) { doc.addPage(); y = 40; }
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
-      doc.setTextColor(5, 60, 94);
+      doc.setTextColor(0, 59, 89);
       doc.text("PROFESSIONAL EXPERIENCE", 40, y);
       y += 6;
       doc.setDrawColor(226, 232, 240);
@@ -224,7 +232,7 @@ const ApplicationsList = () => {
         doc.text(`${exp.startDate || ''} - ${exp.endDate || ''}`, 480, y);
 
         y += 12;
-        doc.setTextColor(5, 60, 94);
+        doc.setTextColor(0, 59, 89);
         doc.text(`${exp.company || ''} | ${exp.location || ''}`, 40, y);
         
         if (exp.description) {
@@ -244,7 +252,7 @@ const ApplicationsList = () => {
       if (y > 720) { doc.addPage(); y = 40; }
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
-      doc.setTextColor(5, 60, 94);
+      doc.setTextColor(0, 59, 89);
       doc.text("ACADEMIC PROJECTS", 40, y);
       y += 6;
       doc.setDrawColor(226, 232, 240);
@@ -283,7 +291,7 @@ const ApplicationsList = () => {
       
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
-      doc.setTextColor(5, 60, 94);
+      doc.setTextColor(0, 59, 89);
       doc.text("SKILLS & ADDITIONAL DETAILS", 40, y);
       y += 6;
       doc.setDrawColor(226, 232, 240);
@@ -357,6 +365,12 @@ const ApplicationsList = () => {
 
   const getStatusBadge = (status) => {
     switch (status) {
+      case 'SELECTED':
+        return <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Award size={12} /> Selected Winner</span>;
+      case 'NOMINATED':
+        return <span className="badge badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Sparkles size={12} /> Nominated</span>;
+      case 'NOT_SELECTED':
+        return <span className="badge badge-danger">Not Selected</span>;
       case 'ACCEPTED':
         return <span className="badge badge-success">Accepted</span>;
       case 'REJECTED':
@@ -369,6 +383,10 @@ const ApplicationsList = () => {
     }
   };
 
+  // Check if current filter represents a closed offer or past deadline
+  const currentFilteredOffer = offers.find(o => o._id === offerIdFilter);
+  const isDeadlinePassed = currentFilteredOffer?.deadline && new Date(currentFilteredOffer.deadline) < new Date();
+
   // If viewing a single student's resume
   if (selectedApp) {
     const offer = selectedApp.offerId || {};
@@ -376,54 +394,64 @@ const ApplicationsList = () => {
     
     return (
       <div style={styles.container} className="animate-fade-in">
-        {/* Back navigation */}
         <button onClick={() => setSelectedApp(null)} style={styles.backBtn}>
-          <ArrowLeft size={16} />
-          Back to Applications List
+          <ArrowLeft size={16} /> Back to Applications List
         </button>
 
         <div style={styles.resumeHeaderPanel} className="glass-card">
           <div style={styles.resumeHeaderInfo}>
             <div>
-              <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: '700' }}>APPLICANT PROFILE</span>
-              <h2 style={{ color: 'var(--text-primary)', fontSize: '1.6rem', margin: '2px 0' }}>{applicant.name}</h2>
+              <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: '700', letterSpacing: '0.05em' }}>APPLICANT PROFILE SUMMARY</span>
+              <h2 style={{ color: 'var(--text-primary)', fontSize: '1.6rem', margin: '4px 0 2px 0' }}>{applicant.name}</h2>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                Applied for: <strong>{offer.title}</strong> ({offer.offerCode})
+                Applied for: <strong>{offer.title}</strong> ({offer.offerCode})  |  LC: <strong>{applicant.lc}</strong>
               </p>
             </div>
             
             <div style={styles.statusActionPanel}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Current Status:</span>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', fontWeight: '500' }}>Status:</span>
                 {getStatusBadge(selectedApp.status)}
               </div>
 
+              {/* Nomination / Selection Controls in Resume Detail View */}
               <div style={styles.actionButtonGroup}>
-                {selectedApp.status === 'APPLIED' && (
+                {user.role === 'LC_ADMIN' && offer.lcScope === 'SPECIFIC' && selectedApp.status !== 'SELECTED' && (
                   <button 
-                    onClick={() => handleUpdateStatus(selectedApp._id, 'REVIEWING')} 
-                    className="btn btn-secondary"
-                    style={{ padding: '8px 14px', fontSize: '0.85rem' }}
-                  >
-                    Mark Reviewing
-                  </button>
-                )}
-                {selectedApp.status !== 'ACCEPTED' && (
-                  <button 
-                    onClick={() => handleUpdateStatus(selectedApp._id, 'ACCEPTED')} 
+                    onClick={() => handleUpdateStatus(selectedApp._id, 'SELECTED')} 
                     className="btn btn-primary"
-                    style={{ padding: '8px 14px', fontSize: '0.85rem', background: 'var(--success)', boxShadow: 'none' }}
+                    style={{ background: 'var(--success)', boxShadow: 'none' }}
                   >
-                    <Check size={14} /> Accept Candidate
+                    <Check size={14} /> Select as Winner
                   </button>
                 )}
-                {selectedApp.status !== 'REJECTED' && (
+
+                {user.role === 'LC_ADMIN' && offer.lcScope === 'GLOBAL' && selectedApp.status !== 'NOMINATED' && selectedApp.status !== 'SELECTED' && (
                   <button 
-                    onClick={() => handleUpdateStatus(selectedApp._id, 'REJECTED')} 
-                    className="btn btn-danger"
-                    style={{ padding: '8px 14px', fontSize: '0.85rem' }}
+                    onClick={() => handleUpdateStatus(selectedApp._id, 'NOMINATED')} 
+                    className="btn btn-primary"
+                    style={{ background: 'var(--warning)', boxShadow: 'none' }}
                   >
-                    <X size={14} /> Reject
+                    <Sparkles size={14} /> Nominate Candidate
+                  </button>
+                )}
+
+                {user.role === 'NC_ADMIN' && offer.lcScope === 'GLOBAL' && selectedApp.status === 'NOMINATED' && (
+                  <button 
+                    onClick={() => handleUpdateStatus(selectedApp._id, 'SELECTED')} 
+                    className="btn btn-primary"
+                    style={{ background: 'var(--success)', boxShadow: 'none' }}
+                  >
+                    <Award size={14} /> Select as Final Winner
+                  </button>
+                )}
+
+                {selectedApp.status !== 'NOT_SELECTED' && selectedApp.status !== 'SELECTED' && (
+                  <button 
+                    onClick={() => handleUpdateStatus(selectedApp._id, 'NOT_SELECTED')} 
+                    className="btn btn-danger"
+                  >
+                    <X size={14} /> Mark Not Selected
                   </button>
                 )}
               </div>
@@ -449,11 +477,11 @@ const ApplicationsList = () => {
     <div style={styles.container} className="animate-fade-in">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Collected Resumes & Applications</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>
+          <h1 className="page-title">Candidate Applications</h1>
+          <p style={{ color: 'var(--text-muted)' }}>
             {user.role === 'NC_ADMIN' 
-              ? 'Review candidate profiles and applications across all committees'
-              : `Review candidate resumes for offers released under LC ${user.lc}`}
+              ? 'Oversee all student nominations and finalize winners'
+              : `Review and nominate/select applicants from LC ${user.lc}`}
           </p>
         </div>
       </div>
@@ -467,8 +495,8 @@ const ApplicationsList = () => {
       {/* Filter panel */}
       <div className="glass-card" style={styles.filterCard}>
         <div style={styles.filterLayout}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-            <Search size={18} color="var(--text-secondary)" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '280px' }}>
+            <Search size={18} color="var(--text-muted)" />
             <select 
               className="form-select"
               value={offerIdFilter}
@@ -478,7 +506,7 @@ const ApplicationsList = () => {
               <option value="">Show All Applications</option>
               {offers.map(o => (
                 <option key={o._id} value={o._id}>
-                  {o.offerCode} - {o.title} ({o.country})
+                  [{o.lcScope}] {o.offerCode} - {o.title}
                 </option>
               ))}
             </select>
@@ -490,21 +518,47 @@ const ApplicationsList = () => {
               className="btn btn-primary"
               title="Generate single PDF file of all applicant resumes"
             >
-              <Download size={16} />
-              Download All Resumes (PDF)
+              <Download size={16} /> Download Resumes PDF ({applications.length})
             </button>
           )}
         </div>
       </div>
 
+      {/* Deadline Notice */}
+      {offerIdFilter && currentFilteredOffer && (
+        <div className="glass-card" style={{ ...styles.noticeCard, borderLeftColor: isDeadlinePassed ? 'var(--danger)' : 'var(--primary)' }}>
+          <Calendar size={18} color={isDeadlinePassed ? 'var(--danger)' : 'var(--primary)'} />
+          <div style={{ flex: 1 }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Application Deadline:</span>
+            <strong style={{ marginLeft: '6px', color: 'var(--text-primary)' }}>
+              {new Date(currentFilteredOffer.deadline).toLocaleString(undefined, {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </strong>
+            {isDeadlinePassed ? (
+              <span className="badge badge-danger" style={{ marginLeft: '12px', fontSize: '0.7rem' }}>Deadline Passed - Applications Locked</span>
+            ) : (
+              <span className="badge badge-success" style={{ marginLeft: '12px', fontSize: '0.7rem' }}>Active</span>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '0.9rem' }}>
+            <Layers size={16} /> Scope: <span className={currentFilteredOffer.lcScope === 'GLOBAL' ? 'badge badge-global' : 'badge badge-specific'}>{currentFilteredOffer.lcScope}</span>
+          </div>
+        </div>
+      )}
+
       {loading ? (
-        <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '40px' }}>Loading collected applications...</p>
+        <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px' }}>Loading application profiles...</p>
       ) : applications.length === 0 ? (
-        <div className="glass-card" style={{ padding: '50px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-          <FileText size={32} style={{ marginBottom: '12px', color: 'var(--text-muted)' }} />
+        <div className="glass-card" style={{ padding: '50px', textAlign: 'center', color: 'var(--text-muted)' }}>
+          <FileText size={36} style={{ marginBottom: '12px', color: 'var(--text-muted)' }} />
           <h3>No applications received</h3>
           <p style={{ marginTop: '6px', fontSize: '0.9rem' }}>
-            {offerIdFilter ? 'No candidates have applied to this specific offer yet.' : 'No student applications exist at the moment.'}
+            {offerIdFilter ? 'No candidates have applied to this offer yet.' : 'No candidate applications exist in the directory.'}
           </p>
         </div>
       ) : (
@@ -512,20 +566,20 @@ const ApplicationsList = () => {
           <table className="custom-table">
             <thead>
               <tr>
-                <th>Applicant Name</th>
-                <th>LC</th>
-                <th>Applied For</th>
-                <th>Country</th>
+                <th>Applicant Details</th>
+                <th>Committee</th>
+                <th>Offer Code & Title</th>
+                <th>Scope</th>
                 <th>Applied Date</th>
                 <th>Status</th>
                 <th>Resume</th>
-                <th>Quick Actions</th>
+                <th>Decisions / Actions</th>
               </tr>
             </thead>
             <tbody>
               {applications.map(app => {
                 const applicant = app.memberId || { name: 'Unknown Student', email: '', lc: '' };
-                const offer = app.offerId || { title: 'Unknown Offer', offerCode: 'N/A', country: '' };
+                const offer = app.offerId || { title: 'Unknown Offer', offerCode: 'N/A', lcScope: 'SPECIFIC' };
                 
                 return (
                   <tr key={app._id}>
@@ -540,11 +594,15 @@ const ApplicationsList = () => {
                     </td>
                     <td>
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontWeight: '500' }}>{offer.title}</span>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>{offer.offerCode}</span>
+                        <span style={{ fontWeight: '500', color: 'var(--text-primary)' }}>{offer.title}</span>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: '600' }}>{offer.offerCode}</span>
                       </div>
                     </td>
-                    <td>{offer.country}</td>
+                    <td>
+                      <span className={offer.lcScope === 'GLOBAL' ? 'badge badge-global' : 'badge badge-specific'} style={{ fontSize: '0.65rem' }}>
+                        {offer.lcScope}
+                      </span>
+                    </td>
                     <td>
                       {new Date(app.appliedAt).toLocaleDateString(undefined, {
                         year: 'numeric',
@@ -559,37 +617,54 @@ const ApplicationsList = () => {
                         className="btn btn-secondary"
                         style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
                       >
-                        <BookOpen size={14} /> Review Resume
+                        <BookOpen size={14} /> Review
                       </button>
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
-                        {app.status === 'APPLIED' && (
+                        {/* Nomination Action for Global Offer (LC Admin) */}
+                        {user.role === 'LC_ADMIN' && offer.lcScope === 'GLOBAL' && app.status !== 'NOMINATED' && app.status !== 'SELECTED' && (
                           <button 
-                            onClick={() => handleUpdateStatus(app._id, 'REVIEWING')} 
-                            className="btn btn-secondary"
-                            style={{ padding: '4px 8px', fontSize: '0.75rem' }}
-                            title="Mark Reviewing"
+                            onClick={() => handleUpdateStatus(app._id, 'NOMINATED')} 
+                            className="btn btn-primary"
+                            style={{ padding: '4px 10px', fontSize: '0.75rem', background: 'var(--warning)', boxShadow: 'none' }}
+                            title="Nominate student from your LC"
                           >
-                            Review
+                            Nominate
                           </button>
                         )}
-                        {app.status !== 'ACCEPTED' && (
+
+                        {/* Selection Action for Specific Offer (LC Admin) */}
+                        {user.role === 'LC_ADMIN' && offer.lcScope === 'SPECIFIC' && app.status !== 'SELECTED' && (
                           <button 
-                            onClick={() => handleUpdateStatus(app._id, 'ACCEPTED')} 
-                            className="btn btn-outline"
-                            style={{ padding: '4px 8px', fontSize: '0.75rem', borderColor: 'var(--success)', color: 'var(--success)' }}
-                            title="Accept Candidate"
+                            onClick={() => handleUpdateStatus(app._id, 'SELECTED')} 
+                            className="btn btn-primary"
+                            style={{ padding: '4px 10px', fontSize: '0.75rem', background: 'var(--success)', boxShadow: 'none' }}
+                            title="Select as Winner"
                           >
-                            Accept
+                            Select Winner
                           </button>
                         )}
-                        {app.status !== 'REJECTED' && (
+
+                        {/* Selection Action for Nominees on Global Offer (NC Admin) */}
+                        {user.role === 'NC_ADMIN' && offer.lcScope === 'GLOBAL' && app.status === 'NOMINATED' && (
                           <button 
-                            onClick={() => handleUpdateStatus(app._id, 'REJECTED')} 
+                            onClick={() => handleUpdateStatus(app._id, 'SELECTED')} 
+                            className="btn btn-primary"
+                            style={{ padding: '4px 10px', fontSize: '0.75rem', background: 'var(--success)', boxShadow: 'none' }}
+                            title="Select as Final Winner"
+                          >
+                            Select Winner
+                          </button>
+                        )}
+
+                        {/* Reject / Reset Option */}
+                        {app.status !== 'NOT_SELECTED' && app.status !== 'SELECTED' && (
+                          <button 
+                            onClick={() => handleUpdateStatus(app._id, 'NOT_SELECTED')} 
                             className="btn btn-outline"
-                            style={{ padding: '4px 8px', fontSize: '0.75rem', borderColor: 'var(--danger)', color: 'var(--danger)' }}
-                            title="Reject Candidate"
+                            style={{ padding: '4px 10px', fontSize: '0.75rem', borderColor: 'var(--danger)', color: 'var(--danger)' }}
+                            title="Mark Not Selected"
                           >
                             Reject
                           </button>
@@ -614,7 +689,7 @@ const styles = {
     padding: '30px 24px',
   },
   errorAlert: {
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    backgroundColor: 'rgba(239, 68, 68, 0.06)',
     border: '1px solid rgba(239, 68, 68, 0.15)',
     borderRadius: 'var(--radius-md)',
     color: 'var(--danger)',
@@ -623,14 +698,28 @@ const styles = {
   },
   filterCard: {
     padding: '16px 24px',
-    marginBottom: '24px',
-    backgroundColor: 'var(--bg-secondary)',
+    marginBottom: '16px',
+    backgroundColor: '#fff',
+    border: '1px solid var(--border-color)',
+    borderRadius: 'var(--radius-md)',
   },
   filterLayout: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: '20px',
+    flexWrap: 'wrap',
+  },
+  noticeCard: {
+    padding: '12px 20px',
+    marginBottom: '24px',
+    backgroundColor: '#fff',
+    border: '1px solid var(--border-color)',
+    borderLeft: '4px solid var(--primary)',
+    borderRadius: 'var(--radius-md)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
     flexWrap: 'wrap',
   },
   backBtn: {
@@ -648,8 +737,10 @@ const styles = {
   },
   resumeHeaderPanel: {
     padding: '24px 30px',
-    backgroundColor: 'var(--bg-secondary)',
-    marginBottom: '20px',
+    backgroundColor: '#fff',
+    border: '1px solid var(--border-color)',
+    borderRadius: 'var(--radius-lg)',
+    marginBottom: '24px',
   },
   resumeHeaderInfo: {
     display: 'flex',
@@ -663,9 +754,6 @@ const styles = {
     flexDirection: 'column',
     alignItems: 'flex-end',
     gap: '12px',
-    '@media (max-width: 600px)': {
-      alignItems: 'flex-start',
-    },
   },
   actionButtonGroup: {
     display: 'flex',
@@ -673,7 +761,7 @@ const styles = {
     flexWrap: 'wrap',
   },
   successToast: {
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    backgroundColor: 'rgba(16, 185, 129, 0.06)',
     border: '1px solid rgba(16, 185, 129, 0.15)',
     color: 'var(--success)',
     padding: '8px 12px',
@@ -682,7 +770,7 @@ const styles = {
     marginTop: '16px',
   },
   errorToast: {
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    backgroundColor: 'rgba(239, 68, 68, 0.06)',
     border: '1px solid rgba(239, 68, 68, 0.15)',
     color: 'var(--danger)',
     padding: '8px 12px',

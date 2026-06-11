@@ -44,8 +44,8 @@ const Navbar = () => {
       <div style={styles.container}>
         {/* Logo */}
         <Link to="/" style={styles.logo}>
-          <Globe size={24} color="#6366f1" style={{ animation: 'spin 12s linear infinite' }} />
-          <span style={styles.logoText}>IAESTE <span style={{ color: '#6366f1' }}>India</span></span>
+          <Globe size={24} color="var(--primary)" style={{ animation: 'spin 12s linear infinite' }} />
+          <span style={styles.logoText}>IAESTE <span style={{ color: 'var(--secondary)' }}>India</span></span>
         </Link>
 
         {/* Desktop Navigation */}
@@ -209,9 +209,9 @@ const styles = {
     position: 'sticky',
     top: 0,
     zIndex: 100,
-    background: 'rgba(11, 15, 25, 0.75)',
-    backdropFilter: 'blur(16px)',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+    background: 'rgba(255, 255, 255, 0.85)',
+    backdropFilter: 'blur(12px)',
+    borderBottom: '1px solid var(--border-color)',
     padding: '0 24px',
     height: '70px',
     display: 'flex',
@@ -235,44 +235,41 @@ const styles = {
     fontFamily: 'var(--font-heading)',
     fontSize: '1.4rem',
     fontWeight: '800',
-    color: '#fff',
+    color: 'var(--primary)',
     letterSpacing: '-0.03em',
   },
   navItems: {
     display: 'flex',
     alignItems: 'center',
     gap: '24px',
-    '@media (maxWidth: 768px)': {
-      display: 'none',
-    },
   },
   link: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     color: 'var(--text-secondary)',
-    fontWeight: '500',
+    fontWeight: '550',
     fontSize: '0.92rem',
     transition: 'var(--transition-fast)',
-    padding: '6px 12px',
-    borderRadius: 'var(--radius-sm)',
+    padding: '8px 14px',
+    borderRadius: 'var(--radius-md)',
   },
   activeLink: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    color: '#fff',
-    backgroundColor: 'rgba(99, 102, 241, 0.12)',
+    color: 'var(--primary)',
+    backgroundColor: 'var(--primary-glow)',
     fontWeight: '600',
     fontSize: '0.92rem',
-    padding: '6px 12px',
-    borderRadius: 'var(--radius-sm)',
-    border: '1px solid rgba(99, 102, 241, 0.2)',
+    padding: '8px 14px',
+    borderRadius: 'var(--radius-md)',
+    border: '1px solid rgba(0, 59, 89, 0.1)',
   },
   divider: {
     height: '24px',
     width: '1px',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'var(--border-color)',
   },
   userInfo: {
     display: 'flex',
@@ -283,11 +280,12 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '28px',
-    height: '28px',
+    width: '32px',
+    height: '32px',
     borderRadius: 'var(--radius-full)',
-    backgroundColor: 'var(--bg-tertiary)',
-    color: 'var(--text-secondary)',
+    backgroundColor: 'var(--primary-glow)',
+    color: 'var(--primary)',
+    fontWeight: '600',
   },
   userDetail: {
     display: 'flex',
@@ -298,7 +296,7 @@ const styles = {
   userName: {
     fontSize: '0.85rem',
     fontWeight: '600',
-    color: '#fff',
+    color: 'var(--text-primary)',
   },
   logoutBtn: {
     display: 'flex',
@@ -309,8 +307,12 @@ const styles = {
     color: 'var(--text-muted)',
     cursor: 'pointer',
     padding: '8px',
-    borderRadius: 'var(--radius-sm)',
+    borderRadius: 'var(--radius-md)',
     transition: 'var(--transition-fast)',
+    '&:hover': {
+      backgroundColor: 'var(--bg-tertiary)',
+      color: 'var(--danger)',
+    }
   },
   authLinks: {
     display: 'flex',
@@ -319,14 +321,14 @@ const styles = {
   },
   loginLink: {
     color: 'var(--text-secondary)',
-    fontWeight: '500',
+    fontWeight: '550',
     fontSize: '0.95rem',
   },
   mobileToggle: {
     display: 'none',
     background: 'none',
     border: 'none',
-    color: '#fff',
+    color: 'var(--text-primary)',
     cursor: 'pointer',
   },
   mobileMenu: {
@@ -334,8 +336,8 @@ const styles = {
     top: '70px',
     left: 0,
     width: '100%',
-    background: 'var(--bg-secondary)',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+    background: '#fff',
+    borderBottom: '1px solid var(--border-color)',
     boxShadow: 'var(--shadow-lg)',
     padding: '16px 24px',
   },
@@ -349,15 +351,16 @@ const styles = {
     flexDirection: 'column',
     gap: '4px',
     paddingBottom: '12px',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+    borderBottom: '1px solid var(--border-color)',
   },
   mobileUserName: {
     fontWeight: '600',
+    color: 'var(--text-primary)',
   },
   mobileLink: {
     color: 'var(--text-secondary)',
     fontSize: '1rem',
-    fontWeight: '500',
+    fontWeight: '550',
     padding: '4px 0',
   },
   mobileLogoutBtn: {
@@ -370,7 +373,7 @@ const styles = {
     fontSize: '1rem',
     cursor: 'pointer',
     padding: '8px 0',
-    fontWeight: '500',
+    fontWeight: '550',
   }
 };
 

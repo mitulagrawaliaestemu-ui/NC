@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogIn, Globe, AlertTriangle } from 'lucide-react';
+import { LogIn, Globe, AlertTriangle, Info } from 'lucide-react';
 
 const Login = () => {
   const { login, user } = useAuth();
@@ -48,7 +48,7 @@ const Login = () => {
         {/* Header */}
         <div style={styles.header}>
           <div style={styles.logoWrapper}>
-            <Globe size={32} color="#6366f1" style={{ animation: 'spin 12s linear infinite' }} />
+            <Globe size={32} color="var(--primary)" style={{ animation: 'spin 12s linear infinite' }} />
           </div>
           <h2 style={styles.title}>Welcome Back</h2>
           <p style={styles.subtitle}>Sign in to your IAESTE India Portal</p>
@@ -70,7 +70,7 @@ const Login = () => {
               className="form-input"
               type="email" 
               id="email" 
-              placeholder="e.g. student@iaeste.in"
+              placeholder="e.g. ncadmin@iaeste.in"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={submitting}
@@ -116,23 +116,29 @@ const Login = () => {
       
       {/* Demo Credentials Info Panel */}
       <div style={styles.demoInfoPanel} className="glass-card">
-        <h4 style={{ color: '#fff', marginBottom: '8px', fontSize: '0.95rem' }}>Demo Access Accounts:</h4>
+        <h4 style={{ color: 'var(--text-primary)', marginBottom: '12px', fontSize: '0.95rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Info size={16} color="var(--primary)" /> Demo Access Credentials
+        </h4>
         <div style={styles.demoGrid}>
-          <div>
-            <strong>NC Admin:</strong>
-            <div style={styles.demoCred}>ncadmin@iaeste.in / admin123</div>
+          <div style={styles.demoCard}>
+            <strong style={{ color: 'var(--text-primary)' }}>NC Admin</strong>
+            <div style={styles.demoCred}>ncadmin@iaeste.in</div>
+            <div style={styles.demoPass}>admin123</div>
           </div>
-          <div>
-            <strong>LC MU Admin:</strong>
-            <div style={styles.demoCred}>muadmin@iaeste.in / admin123</div>
+          <div style={styles.demoCard}>
+            <strong style={{ color: 'var(--text-primary)' }}>LC MU Admin</strong>
+            <div style={styles.demoCred}>muadmin@iaeste.in</div>
+            <div style={styles.demoPass}>admin123</div>
           </div>
-          <div>
-            <strong>LC MUJ Admin:</strong>
-            <div style={styles.demoCred}>mujadmin@iaeste.in / admin123</div>
+          <div style={styles.demoCard}>
+            <strong style={{ color: 'var(--text-primary)' }}>LC MUJ Admin</strong>
+            <div style={styles.demoCred}>mujadmin@iaeste.in</div>
+            <div style={styles.demoPass}>admin123</div>
           </div>
-          <div>
-            <strong>LC KU Admin:</strong>
-            <div style={styles.demoCred}>kuadmin@iaeste.in / admin123</div>
+          <div style={styles.demoCard}>
+            <strong style={{ color: 'var(--text-primary)' }}>LC KU Admin</strong>
+            <div style={styles.demoCred}>kuadmin@iaeste.in</div>
+            <div style={styles.demoPass}>admin123</div>
           </div>
         </div>
       </div>
@@ -149,12 +155,16 @@ const styles = {
     minHeight: 'calc(100vh - 100px)',
     padding: '24px',
     boxSizing: 'border-box',
+    backgroundColor: 'var(--bg-primary)',
   },
   card: {
     width: '100%',
     maxWidth: '420px',
     padding: '40px',
     borderRadius: 'var(--radius-lg)',
+    backgroundColor: '#fff',
+    border: '1px solid var(--border-color)',
+    boxShadow: 'var(--shadow-md)',
   },
   header: {
     display: 'flex',
@@ -169,14 +179,14 @@ const styles = {
     width: '60px',
     height: '60px',
     borderRadius: 'var(--radius-md)',
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    backgroundColor: 'var(--primary-glow)',
     marginBottom: '16px',
-    border: '1px solid rgba(99, 102, 241, 0.2)',
+    border: '1px solid rgba(0, 59, 89, 0.1)',
   },
   title: {
     fontSize: '1.75rem',
     fontWeight: '700',
-    color: '#fff',
+    color: 'var(--text-primary)',
     marginBottom: '6px',
     letterSpacing: '-0.02em',
   },
@@ -189,8 +199,8 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    border: '1px solid rgba(239, 68, 68, 0.25)',
+    backgroundColor: 'rgba(239, 68, 68, 0.06)',
+    border: '1px solid rgba(239, 68, 68, 0.15)',
     borderRadius: 'var(--radius-md)',
     color: 'var(--danger)',
     padding: '12px 16px',
@@ -224,22 +234,34 @@ const styles = {
     width: '100%',
     maxWidth: '420px',
     marginTop: '24px',
-    padding: '16px 20px',
-    borderRadius: 'var(--radius-md)',
-    backgroundColor: 'rgba(30, 41, 59, 0.4)',
-    border: '1px solid rgba(255, 255, 255, 0.05)',
+    padding: '20px',
+    borderRadius: 'var(--radius-lg)',
+    backgroundColor: '#fff',
+    border: '1px solid var(--border-color)',
+    boxShadow: 'var(--shadow-sm)',
   },
   demoGrid: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
     gap: '12px',
-    fontSize: '0.8rem',
-    color: 'var(--text-secondary)',
+  },
+  demoCard: {
+    padding: '10px',
+    backgroundColor: 'var(--bg-tertiary)',
+    borderRadius: '6px',
+    fontSize: '0.85rem',
+    border: '1px solid var(--border-color)',
   },
   demoCred: {
+    color: 'var(--text-secondary)',
+    marginTop: '4px',
+    fontSize: '0.75rem',
+  },
+  demoPass: {
     fontFamily: 'monospace',
-    color: 'var(--accent)',
-    marginTop: '2px',
+    color: 'var(--secondary)',
+    fontWeight: '600',
+    fontSize: '0.75rem',
   }
 };
 
