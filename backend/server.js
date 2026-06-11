@@ -12,134 +12,114 @@ import applicationRoutes from './routes/applicationRoutes.js';
 
 dotenv.config();
 
-const PORT = Number(process.env.PORT) || 5000;
-const MONGODB_HOSTS = [
-  'ac-xmfpnvb-shard-00-00.lzucdxf.mongodb.net',
-  'ac-xmfpnvb-shard-00-01.lzucdxf.mongodb.net',
-  'ac-xmfpnvb-shard-00-02.lzucdxf.mongodb.net'
-];
-const MONGODB_REPLICA_SET = 'atlas-rp5p7t-shard-0';
+const PORT = process.env.PORT || 5000;
 
-const buildDirectMongoUri = (password) => {
-  return `mongodb://Mitul:${encodeURIComponent(password)}@${MONGODB_HOSTS.join(',')}/iaeste_india?authSource=admin&replicaSet=${MONGODB_REPLICA_SET}&retryWrites=true&w=majority&tls=true`;
-};
+// =========================
+// ENV CHECK (IMPORTANT)
+// =========================
+const MONGODB_URI = process.env.MONGODB_URI;
 
-const buildMongoUri = () => {
-  const password = process.env.MONGODB_PASSWORD?.trim();
-  if (password) {
-    return {
-      primary: `mongodb+srv://Mitul:${encodeURIComponent(password)}@cluster.lzucdxf.mongodb.net/iaeste_india?retryWrites=true&w=majority&appName=Cluster`,
-      fallback: buildDirectMongoUri(password)
-    };
-  }
+if (!MONGODB_URI) {
+  console.error("❌ MONGODB_URI is missing in environment variables");
+  process.exit(1);
+}
 
-  const explicitUri = process.env.MONGODB_URI?.trim();
-  if (explicitUri) {
-    return { primary: explicitUri, fallback: null };
-  }
-
-  return { primary: 'mongodb://127.0.0.1:27017/iaeste_india', fallback: null };
-};
-
-const { primary: MONGODB_URI, fallback: FALLBACK_MONGODB_URI } = buildMongoUri();
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
+// =========================
+// CORS CONFIG
+// =========================
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
   .split(',')
-  .map(origin => origin.trim())
-  .filter(Boolean);
+  .map(o => o.trim());
 
 const app = express();
 
-// Middlewares
 app.use(cors({
   origin: allowedOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 app.use(express.json());
 
-// Routes
+// =========================
+// ROUTES
+// =========================
 app.use('/api/auth', authRoutes);
 app.use('/api/offers', offerRoutes);
 app.use('/api/members', memberRoutes);
 app.use('/api/applications', applicationRoutes);
 
-// Health check endpoint
+// Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'IAESTE India Backend Server is healthy' });
+  res.json({
+    status: 'OK',
+    message: 'IAESTE India Backend Server is running'
+  });
 });
 
-// Database seeding function for Admins
+// =========================
+// SEED ADMIN USERS
+// =========================
 const seedAdmins = async () => {
   try {
     const salt = await bcrypt.genSalt(10);
     const defaultPasswordHash = await bcrypt.hash('admin123', salt);
 
-    // 1. Seed NC Admin
+    // NC Admin
     const ncAdminExists = await User.findOne({ role: 'NC_ADMIN' });
     if (!ncAdminExists) {
-      const ncAdmin = new User({
+      await User.create({
         name: 'National Committee Admin',
         email: 'ncadmin@iaeste.in',
         password: defaultPasswordHash,
         role: 'NC_ADMIN',
         lc: 'GLOBAL'
       });
-      await ncAdmin.save();
-      console.log('Seeded NC Admin: ncadmin@iaeste.in / admin123');
+      console.log('Seeded NC Admin');
     }
 
-    // 2. Seed LC Admins
+    // LC Admins
     const lcs = ['MU', 'MUJ', 'KU', 'JECRC'];
+
     for (const lc of lcs) {
       const email = `${lc.toLowerCase()}admin@iaeste.in`;
-      const lcAdminExists = await User.findOne({ email });
-      if (!lcAdminExists) {
-        const lcAdmin = new User({
+
+      const exists = await User.findOne({ email });
+      if (!exists) {
+        await User.create({
           name: `LC ${lc} Admin`,
           email,
           password: defaultPasswordHash,
           role: 'LC_ADMIN',
           lc
         });
-        await lcAdmin.save();
-        console.log(`Seeded LC Admin for ${lc}: ${email} / admin123`);
+        console.log(`Seeded LC Admin: ${lc}`);
       }
     }
-  } catch (error) {
-    console.error('Error seeding admin users:', error);
+  } catch (err) {
+    console.error('Seed error:', err);
   }
 };
 
-// Connect to Database & Start Server
-if (process.env.SKIP_DB_CONNECT === 'true') {
-  console.log('Skipping MongoDB connection because SKIP_DB_CONNECT=true.');
-} else {
-  const connect = async () => {
-    try {
-      await mongoose.connect(MONGODB_URI);
-    } catch (err) {
-      const shouldFallback = FALLBACK_MONGODB_URI && String(err?.message || err).includes('querySrv');
+// =========================
+// DB CONNECT + START SERVER
+// =========================
+const startServer = async () => {
+  try {
+    await mongoose.connect(MONGODB_URI);
+    console.log('✅ Connected to MongoDB');
 
-      if (!shouldFallback) {
-        throw err;
-      }
+    await seedAdmins();
 
-      console.warn('Primary MongoDB SRV lookup failed. Retrying with direct hosts.');
-      await mongoose.connect(FALLBACK_MONGODB_URI);
-    }
-  };
-
-  connect()
-    .then(async () => {
-      console.log('Connected to MongoDB database successfully.');
-      await seedAdmins();
-      app.listen(PORT, () => {
-        console.log(`Backend server is running on port ${PORT}`);
-      });
-    })
-    .catch((err) => {
-      console.error('MongoDB database connection error:', err);
-      process.exit(1);
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
     });
-}
+
+  } catch (err) {
+    console.error('❌ MongoDB connection failed:', err);
+    process.exit(1);
+  }
+};
+
+startServer();
