@@ -1,7 +1,7 @@
 const trimTrailingSlash = (value) => value.replace(/\/+$/, '');
 
 const apiBaseUrl = (() => {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+  const baseUrl = import.meta.env.VITE_API_URL?.trim() || import.meta.env.VITE_API_BASE_URL?.trim();
   return baseUrl ? trimTrailingSlash(baseUrl) : '';
 })();
 
