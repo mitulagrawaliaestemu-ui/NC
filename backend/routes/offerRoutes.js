@@ -1,9 +1,57 @@
 import express from 'express';
+import multer from 'multer';
+import os from 'os';
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
 import Offer from '../models/Offer.js';
 import AuditLog from '../models/AuditLog.js';
 import { auth, requireNCAdmin, requireLCAdmin, requireAdmin } from '../middleware/auth.js';
+import { aiParseOffer } from '../utils/offerParser.js';
 
 const router = express.Router();
+const upload = multer({ dest: os.tmpdir() });
+
+// Parse PDF and return autofill data (NC Admin only)
+router.post('/parse-pdf', auth, requireNCAdmin, upload.single('pdf'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const pdfPath = req.file.path;
+    const txtPath = `${pdfPath}.txt`;
+
+    console.log(`Uploaded PDF saved at: ${pdfPath}`);
+
+    // Run OCR via Python script
+    const pythonScript = path.resolve(process.cwd(), 'backend', 'scripts', 'ocr_pdf.py');
+    execSync(`python "${pythonScript}" "${pdfPath}" --output "${txtPath}"`);
+
+    if (!fs.existsSync(txtPath)) {
+      throw new Error('OCR text output file was not created');
+    }
+
+    // Read OCR output
+    const ocrText = fs.readFileSync(txtPath, 'utf-8');
+
+    // Parse text using Gemini API or Fallback
+    const parsedData = await aiParseOffer(ocrText);
+
+    // Clean up temporary files
+    try {
+      if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
+      if (fs.existsSync(txtPath)) fs.unlinkSync(txtPath);
+    } catch (cleanupErr) {
+      console.error('Failed to delete temp files:', cleanupErr.message);
+    }
+
+    res.json(parsedData);
+  } catch (error) {
+    console.error('OCR and Parse error:', error);
+    res.status(500).json({ message: error.message || 'Error processing PDF' });
+  }
+});
 
 // Generate unique offer code
 const generateOfferCode = async (lcCode) => {

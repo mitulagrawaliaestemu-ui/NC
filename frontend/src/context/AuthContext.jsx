@@ -11,10 +11,13 @@ export const AuthProvider = ({ children }) => {
 
   // Setup Axios-like fetch helper with auth header
   const authFetch = useCallback(async (url, options = {}) => {
-    const headers = {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    };
+    const headers = {};
+    
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+    
+    Object.assign(headers, options.headers);
 
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;

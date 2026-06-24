@@ -21,7 +21,8 @@ import {
   PieChart,
   BarChart,
   History,
-  Info
+  Info,
+  Upload
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -38,6 +39,7 @@ const Dashboard = () => {
 
   // NC Admin States
   const [showAddForm, setShowAddForm] = useState(false);
+  const [parsingPdf, setParsingPdf] = useState(false);
   const [newOffer, setNewOffer] = useState({
     title: '',
     description: '',
@@ -99,6 +101,56 @@ const Dashboard = () => {
       fetchData();
     }
   }, [user]);
+
+  // Handle PDF Upload & OCR Parsing (NC Admin)
+  const handlePdfUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setParsingPdf(true);
+    setStatus({ type: '', message: '' });
+
+    const formData = new FormData();
+    formData.append('pdf', file);
+
+    try {
+      const data = await authFetch('/api/offers/parse-pdf', {
+        method: 'POST',
+        body: formData
+      });
+
+      let mappedWorkType = 'Work';
+      if (data.workType === 'HYBRID') mappedWorkType = 'Hybrid';
+      else if (data.workType === 'REMOTE') mappedWorkType = 'Research';
+
+      // Format date for datetime-local (requires YYYY-MM-DDTHH:MM)
+      let deadlineStr = '';
+      if (data.deadline) {
+        deadlineStr = data.deadline.includes('T') ? data.deadline.substring(0, 16) : `${data.deadline}T23:59`;
+      }
+
+      setNewOffer(prev => ({
+        ...prev,
+        title: data.title || '',
+        description: data.description || '',
+        requirements: data.requirements || '',
+        country: data.country || '',
+        duration: data.duration || '',
+        payment: data.payment || '',
+        workType: mappedWorkType,
+        deadline: deadlineStr
+      }));
+
+      setStatus({ type: 'success', message: 'PDF parsed successfully! The form has been autofilled.' });
+    } catch (error) {
+      console.error('Error uploading/parsing PDF:', error);
+      setStatus({ type: 'error', message: error.message || 'Failed to parse PDF offer.' });
+    } finally {
+      setParsingPdf(false);
+      // Clear file input
+      e.target.value = null;
+    }
+  };
 
   // Handle Offer Upload (NC Admin)
   const handleAddOfferSubmit = async (e) => {
@@ -388,10 +440,43 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* Add Offer Form (Collapsible) */}
           {showAddForm && (
             <div className="glass-card animate-slide-up" style={styles.formCard}>
               <h3 style={{ marginBottom: '20px', color: 'var(--text-primary)', fontWeight: '600' }}>Create Internship Offer</h3>
+              
+              {/* PDF Autofill Section */}
+              <div style={styles.uploadSection}>
+                <div style={styles.uploadDropZone}>
+                  <div style={styles.uploadIconContainer}>
+                    <Upload size={20} style={{ color: 'var(--secondary)' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <h4 style={styles.uploadTitle}>Autofill from PDF Offer Sheet</h4>
+                    <p style={styles.uploadDesc}>Upload an IAESTE PDF offer sheet to automatically extract all fields using local OCR and AI.</p>
+                  </div>
+                  <div>
+                    <label className="btn btn-secondary" style={{ cursor: parsingPdf ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                      {parsingPdf ? (
+                        <>
+                          <div className="spinner-mini" style={{ marginRight: '6px' }}></div> Parsing Offer...
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={16} /> Upload PDF Offer
+                        </>
+                      )}
+                      <input 
+                        type="file" 
+                        accept=".pdf" 
+                        onChange={handlePdfUpload} 
+                        style={{ display: 'none' }} 
+                        disabled={parsingPdf}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
               <form onSubmit={handleAddOfferSubmit}>
                 <div style={styles.formGrid}>
                   <div className="form-group">
@@ -1148,6 +1233,41 @@ const styles = {
     fontSize: '2.2rem',
     fontWeight: '800',
     color: 'var(--text-primary)',
+  },
+  uploadSection: {
+    marginBottom: '24px',
+    padding: '20px',
+    backgroundColor: 'rgba(0, 119, 145, 0.03)',
+    border: '1px dashed rgba(0, 119, 145, 0.25)',
+    borderRadius: 'var(--radius-md)',
+  },
+  uploadDropZone: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    textAlign: 'left',
+  },
+  uploadIconContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '48px',
+    height: '48px',
+    backgroundColor: 'rgba(0, 119, 145, 0.08)',
+    borderRadius: 'var(--radius-md)',
+    flexShrink: 0,
+  },
+  uploadTitle: {
+    fontSize: '0.95rem',
+    fontWeight: '600',
+    color: 'var(--text-primary)',
+    margin: '0 0 4px 0',
+  },
+  uploadDesc: {
+    fontSize: '0.82rem',
+    color: 'var(--text-muted)',
+    margin: 0,
+    lineHeight: '1.4',
   },
   formCard: {
     padding: '30px',
